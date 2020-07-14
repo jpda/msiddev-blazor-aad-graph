@@ -1,0 +1,96 @@
+﻿@page "/fetchdata"
+
+@using BlazorServerSideAAD.Data
+@inject WeatherForecastService ForecastService
+@inject IHttpClientFactory HttpClientFactory
+@inject Microsoft.Identity.Web.ITokenAcquisition TokenAcquisitionService
+
+<h1>Weather forecast</h1>
+
+<p>This component demonstrates fetching data from a service.</p>
+
+@if (forecasts == null)
+{
+    <p><em>Loading...</em></p>
+}
+else
+{
+    <h1>Hello @userDisplayName !!!!</h1>
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Subject</th>
+                <th>Sender</th>
+                <th>Received Time</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var mail in messages)
+            {
+                <tr>
+                    <td>@mail.Subject</td>
+                    <td>@mail.Sender</td>
+                    <td>@mail.ReceivedTime</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    private WeatherForecast[] forecasts;
+    private string userDisplayName;
+    private List<MailMessage> messages = new List<MailMessage>();
+
+    private HttpClient _httpClient;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _httpClient = HttpClientFactory.CreateClient();
+        forecasts = await ForecastService.GetForecastAsync(DateTime.Now);
+
+        // get a token
+        var token = await TokenAcquisitionService.GetAccessTokenForUserAsync(new string[] { "User.Read", "Mail.Read" });
+
+        // make API call
+        _httpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+        var dataRequest = await _httpClient.GetAsync("https://graph.microsoft.com/beta/me");
+
+        if (dataRequest.IsSuccessStatusCode)
+        {
+            var userData = System.Text.Json.JsonDocument.Parse(await dataRequest.Content.ReadAsStreamAsync());
+            userDisplayName = userData.RootElement.GetProperty("displayName").GetString();
+        }
+
+        var mailRequest = await _httpClient.GetAsync("https://graph.microsoft.com/beta/me/messages?$select=subject,receivedDateTime,sender&$top=10");
+
+        if (mailRequest.IsSuccessStatusCode)
+        {
+            var mailData = System.Text.Json.JsonDocument.Parse(await mailRequest.Content.ReadAsStreamAsync());
+            var messagesArray = mailData.RootElement.GetProperty("value").EnumerateArray();
+
+            foreach (var m in messagesArray)
+            {
+                var message = new MailMessage();
+                message.Subject = m.GetProperty("subject").GetString();
+                message.Sender = m.GetProperty("sender").GetProperty("emailAddress").GetProperty("address").GetString();
+                message.ReceivedTime = m.GetProperty("receivedDateTime").GetDateTime();
+                messages.Add(message);
+            }
+
+            //messages.AddRange(messagesArray.Select(x => new MailMessage()
+            //{
+            //    Subject = x.GetProperty("subject").GetString(),
+            //    Sender = x.GetProperty("sender").GetProperty("emailAddress").GetProperty("address").GetString(),
+            //    ReceivedTime = x.GetProperty("receivedTime").GetDateTime()
+            //}).ToList());
+        }
+    }
+
+    public class MailMessage
+    {
+        public string Subject;
+        public string Sender;
+        public DateTime ReceivedTime;
+    }
+}
