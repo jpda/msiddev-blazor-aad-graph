@@ -18,6 +18,8 @@ using Microsoft.Identity.Web;
 using Microsoft.Identity.Web.TokenCacheProviders.InMemory;
 using Microsoft.Identity.Web.TokenCacheProviders.Distributed;
 using Microsoft.Identity.Web.UI;
+using Microsoft.Extensions.Caching.Cosmos;
+using Microsoft.Azure.Cosmos.Fluent;
 
 namespace BlazorServerSideAAD
 {
@@ -34,11 +36,19 @@ namespace BlazorServerSideAAD
         // For more information on how to configure your application, visit https://go.microsoft.com/fwlink/?LinkID=398940
         public void ConfigureServices(IServiceCollection services)
         {
+            services.AddCosmosCache((CosmosCacheOptions cacheOptions) =>
+            {
+                cacheOptions.ContainerName = Configuration["CosmosCache:ContainerName"];
+                cacheOptions.DatabaseName = Configuration["CosmosCache:DatabaseName"];
+                cacheOptions.ClientBuilder = new CosmosClientBuilder(Configuration["CosmosCache:ConnectionString"]);
+                cacheOptions.CreateIfNotExists = true;
+            });
+
             services.AddHttpClient();
             services.AddMicrosoftWebAppAuthentication(Configuration)
                 // be sure to request all required permissions up-front
                 .AddMicrosoftWebAppCallsWebApi(Configuration, new string[] { "User.Read", "Mail.Read" })
-                .AddInMemoryTokenCaches();
+                .AddDistributedTokenCaches();
 
             services.AddControllersWithViews(options =>
             {
