@@ -20,6 +20,7 @@ using Microsoft.Identity.Web.TokenCacheProviders.Distributed;
 using Microsoft.Identity.Web.UI;
 using Microsoft.Extensions.Caching.Cosmos;
 using Microsoft.Azure.Cosmos.Fluent;
+using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 
 namespace BlazorServerSideAAD
 {
@@ -45,9 +46,10 @@ namespace BlazorServerSideAAD
             });
 
             services.AddHttpClient();
-            services.AddMicrosoftWebAppAuthentication(Configuration)
+            services.AddAuthentication(OpenIdConnectDefaults.AuthenticationScheme)
+                .AddMicrosoftIdentityWebApp(Configuration.GetSection("AzureAd"))
                 // be sure to request all required permissions up-front
-                .AddMicrosoftWebAppCallsWebApi(Configuration, new string[] { "User.Read", "Mail.Read" })
+                .EnableTokenAcquisitionToCallDownstreamApi(new string[] { "User.Read", "Mail.Read" })
                 .AddDistributedTokenCaches();
 
             services.AddControllersWithViews(options =>
