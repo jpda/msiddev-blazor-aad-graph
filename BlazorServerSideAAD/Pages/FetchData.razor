@@ -4,6 +4,7 @@
 @inject WeatherForecastService ForecastService
 @inject IHttpClientFactory HttpClientFactory
 @inject Microsoft.Identity.Web.ITokenAcquisition TokenAcquisitionService
+@inject Microsoft.Identity.Web.MicrosoftIdentityConsentAndConditionalAccessHandler ConsentHandler
 
 <h1>Weather forecast</h1>
 
@@ -15,7 +16,7 @@
 }
 else
 {
-    <h1>Hello @userDisplayName !!!!</h1>
+    <h1>Hello @userDisplayName!!!!</h1>
     <table class="table">
         <thead>
             <tr>
@@ -32,6 +33,28 @@ else
                     <td>@mail.Sender</td>
                     <td>@mail.ReceivedTime</td>
                 </tr>
+
+            }
+        </tbody>
+    </table>
+    <h2>Azure tenants</h2>
+        <table class="table">
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Id</th>
+                <th>Default domain</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var t in tenants)
+            {
+                <tr>
+                    <td>@t.DisplayName</td>
+                    <td>@t.TenantId</td>
+                    <td>@t.DefaultDomain</td>
+                </tr>
+
             }
         </tbody>
     </table>
@@ -41,19 +64,29 @@ else
     private WeatherForecast[] forecasts;
     private string userDisplayName;
     private List<MailMessage> messages = new List<MailMessage>();
-
+        private List<Tenant> tenants = new List<Tenant>();
     private HttpClient _httpClient;
-
     protected override async Task OnInitializedAsync()
     {
         _httpClient = HttpClientFactory.CreateClient();
         forecasts = await ForecastService.GetForecastAsync(DateTime.Now);
+        var graphToken = "";
+        var azureRestToken = "";
+        
+        try
+        {
+            graphToken = await TokenAcquisitionService.GetAccessTokenForUserAsync(new string[] { "User.Read", "Mail.Read" });
+            azureRestToken = await TokenAcquisitionService.GetAccessTokenForUserAsync(new string[] { "https://management.azure.com//user_impersonation" });
+        }
+        catch (Exception ex)
+        {
+            ConsentHandler.HandleException(ex);
+        }
 
-        // get a token
-        var token = await TokenAcquisitionService.GetAccessTokenForUserAsync(new string[] { "User.Read", "Mail.Read" });
+        //if (string.IsNullOrWhiteSpace(graphToken) || ) { return; }
 
         // make API call
-        _httpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+        _httpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", graphToken);
         var dataRequest = await _httpClient.GetAsync("https://graph.microsoft.com/beta/me");
 
         if (dataRequest.IsSuccessStatusCode)
@@ -77,13 +110,21 @@ else
                 message.ReceivedTime = m.GetProperty("receivedDateTime").GetDateTime();
                 messages.Add(message);
             }
+        }
 
-            //messages.AddRange(messagesArray.Select(x => new MailMessage()
-            //{
-            //    Subject = x.GetProperty("subject").GetString(),
-            //    Sender = x.GetProperty("sender").GetProperty("emailAddress").GetProperty("address").GetString(),
-            //    ReceivedTime = x.GetProperty("receivedTime").GetDateTime()
-            //}).ToList());
+         _httpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", azureRestToken);
+        var azureSubscriptionRequest = await _httpClient.GetAsync("https://management.azure.com/tenants?api-version=2020-01-01");
+
+        if (azureSubscriptionRequest.IsSuccessStatusCode)
+        {
+            var tenantData = System.Text.Json.JsonDocument.Parse(await azureSubscriptionRequest.Content.ReadAsStreamAsync());
+            var tenantArray = tenantData.RootElement.GetProperty("value").EnumerateArray();
+
+            tenants = tenantArray.Select(x => new Tenant() {
+                DefaultDomain = x.GetProperty("defaultDomain").GetString(),
+                DisplayName = x.GetProperty("displayName").GetString(),
+                TenantId = x.GetProperty("tenantId").GetString()
+            }).ToList();
         }
     }
 
@@ -93,4 +134,11 @@ else
         public string Sender;
         public DateTime ReceivedTime;
     }
+
+    public class Tenant {
+        public string TenantId;
+        public string DefaultDomain;
+        public string DisplayName;
+    }
+
 }

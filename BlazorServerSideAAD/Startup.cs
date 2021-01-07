@@ -49,8 +49,10 @@ namespace BlazorServerSideAAD
             services.AddAuthentication(OpenIdConnectDefaults.AuthenticationScheme)
                 .AddMicrosoftIdentityWebApp(Configuration.GetSection("AzureAd"))
                 // be sure to request all required permissions up-front
-                .EnableTokenAcquisitionToCallDownstreamApi(new string[] { "User.Read", "Mail.Read" })
-                .AddDistributedTokenCaches();
+                .EnableTokenAcquisitionToCallDownstreamApi(new [] {"User.Read", "Mail.Read", "https://management.azure.com/user_impersonation"})
+                .AddInMemoryTokenCaches()
+                //.AddDistributedTokenCaches();
+                ;
 
             services.AddControllersWithViews(options =>
             {
@@ -61,7 +63,7 @@ namespace BlazorServerSideAAD
             }).AddMicrosoftIdentityUI();
 
             services.AddRazorPages();
-            services.AddServerSideBlazor();
+            services.AddServerSideBlazor().AddMicrosoftIdentityConsentHandler();
             services.AddSingleton<WeatherForecastService>();
         }
 
