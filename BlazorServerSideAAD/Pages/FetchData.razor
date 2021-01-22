@@ -17,7 +17,7 @@
 else
 {
     <h1>Hello @userDisplayName!!!!</h1>
-    <code>@accessToken</code>
+    <code>@forecastToken</code>
     <table class="table">
         <thead>
             <tr>
@@ -62,6 +62,7 @@ else
 }
 
 @code {
+    private string forecastToken;
     private string accessToken;
     private WeatherForecast[] forecasts;
     private string userDisplayName;
@@ -72,6 +73,7 @@ else
     {
         _httpClient = HttpClientFactory.CreateClient();
         forecasts = await ForecastService.GetForecastAsync(DateTime.Now);
+        forecastToken = forecasts.First().Summary;
         var graphToken = "";
         var azureRestToken = "";
         
