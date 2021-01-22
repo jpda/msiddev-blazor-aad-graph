@@ -17,6 +17,7 @@
 else
 {
     <h1>Hello @userDisplayName!!!!</h1>
+    <code>@accessToken</code>
     <table class="table">
         <thead>
             <tr>
@@ -61,6 +62,7 @@ else
 }
 
 @code {
+    private string accessToken;
     private WeatherForecast[] forecasts;
     private string userDisplayName;
     private List<MailMessage> messages = new List<MailMessage>();
@@ -75,8 +77,9 @@ else
         
         try
         {
-            graphToken = await TokenAcquisitionService.GetAccessTokenForUserAsync(new string[] { "User.Read", "Mail.Read" });
-            azureRestToken = await TokenAcquisitionService.GetAccessTokenForUserAsync(new string[] { "https://management.azure.com//user_impersonation" });
+            graphToken = await TokenAcquisitionService.GetAccessTokenForUserAsync(new string[] { "https://jpdab2c.onmicrosoft.com/blazor-backend/Stuff.Read" });
+            accessToken = graphToken;
+            //azureRestToken = await TokenAcquisitionService.GetAccessTokenForUserAsync(new string[] { "https://management.azure.com//user_impersonation" });
         }
         catch (Exception ex)
         {
@@ -87,44 +90,12 @@ else
 
         // make API call
         _httpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", graphToken);
-        var dataRequest = await _httpClient.GetAsync("https://graph.microsoft.com/beta/me");
+        var dataRequest = await _httpClient.GetAsync("https://jpda.ngrok.io/api");
 
         if (dataRequest.IsSuccessStatusCode)
         {
             var userData = System.Text.Json.JsonDocument.Parse(await dataRequest.Content.ReadAsStreamAsync());
             userDisplayName = userData.RootElement.GetProperty("displayName").GetString();
-        }
-
-        var mailRequest = await _httpClient.GetAsync("https://graph.microsoft.com/beta/me/messages?$select=subject,receivedDateTime,sender&$top=10");
-
-        if (mailRequest.IsSuccessStatusCode)
-        {
-            var mailData = System.Text.Json.JsonDocument.Parse(await mailRequest.Content.ReadAsStreamAsync());
-            var messagesArray = mailData.RootElement.GetProperty("value").EnumerateArray();
-
-            foreach (var m in messagesArray)
-            {
-                var message = new MailMessage();
-                message.Subject = m.GetProperty("subject").GetString();
-                message.Sender = m.GetProperty("sender").GetProperty("emailAddress").GetProperty("address").GetString();
-                message.ReceivedTime = m.GetProperty("receivedDateTime").GetDateTime();
-                messages.Add(message);
-            }
-        }
-
-         _httpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", azureRestToken);
-        var azureSubscriptionRequest = await _httpClient.GetAsync("https://management.azure.com/tenants?api-version=2020-01-01");
-
-        if (azureSubscriptionRequest.IsSuccessStatusCode)
-        {
-            var tenantData = System.Text.Json.JsonDocument.Parse(await azureSubscriptionRequest.Content.ReadAsStreamAsync());
-            var tenantArray = tenantData.RootElement.GetProperty("value").EnumerateArray();
-
-            tenants = tenantArray.Select(x => new Tenant() {
-                DefaultDomain = x.GetProperty("defaultDomain").GetString(),
-                DisplayName = x.GetProperty("displayName").GetString(),
-                TenantId = x.GetProperty("tenantId").GetString()
-            }).ToList();
         }
     }
 
